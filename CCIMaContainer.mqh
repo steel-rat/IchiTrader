@@ -47,6 +47,7 @@ public:
            bool cciAboveChannelUp();
            bool cciBelowChannelDown();
            double calculateMaVector();
+           void drawVerticalLine();
            
            bool cciSellSignal;
            bool cciBuySignal;
@@ -127,6 +128,7 @@ void CCIMaContainer::generateTradeSignal() {
    
    if(cciOversold && !cciGoingSouth) {
       cciBuySignal = true;
+      drawVerticalLine();
       signalAge = 0;
       cciOversold = false;
    }
@@ -160,6 +162,7 @@ void CCIMaContainer::generateTradeSignal() {
    
    if(cciOverbought && !cciGoingNorth ) {
       cciSellSignal = true;
+      drawVerticalLine();
       signalAge = 0;
       cciOverbought = false;
    }
@@ -168,6 +171,22 @@ void CCIMaContainer::generateTradeSignal() {
       cciSellSignal = false;
    }
 }
+
+void CCIMaContainer::drawVerticalLine() {
+   //if(TimeDay(dailyTime)==14 && ObjectFind(0,name)<0)
+   //     {
+   long _chart_id = ChartID();
+   
+   string name = "CCISig";
+         if(!ObjectCreate(_chart_id,name,OBJ_VLINE,0,TimeCurrent(),0))
+            Print("Fail to draw the line ERROR CODE : ",GetLastError());
+         ObjectSetInteger(_chart_id,name,OBJPROP_WIDTH,1);
+         ObjectSetInteger(_chart_id,name,OBJPROP_COLOR,clrGreen);
+         ObjectSetInteger(_chart_id,name,OBJPROP_BACK,true);
+    //    }
+    // }
+}
+
 //MA Vector shows if MA is going up (positive value) or down (negative)
 double CCIMaContainer::calculateMaVector() {
    return MA_Buffer[1] - MA_Buffer[10];
