@@ -29,13 +29,14 @@ private:
             double cciMin;
             double cciMax;
             
+                       
                                   
 
 public:
             CCIMaContainer(string commodity, ENUM_TIMEFRAMES per,ENUM_INDEXBUFFER_TYPE data);
            ~CCIMaContainer();
            bool copyBuffers();
-           void generateTradeSignal();
+           void generateTradeSignal(MqlRates &mrate[]);
            bool cciBelowChannelUp();
            bool cciGoBelowChannelUp();
            bool cciGoAboveChannelUp();
@@ -47,7 +48,7 @@ public:
            bool cciAboveChannelUp();
            bool cciBelowChannelDown();
            double calculateMaVector();
-           void drawVerticalLine();
+           void drawVerticalLine(MqlRates &mrate[]);
            
            bool cciSellSignal;
            bool cciBuySignal;
@@ -98,7 +99,8 @@ bool CCIMaContainer::copyBuffers() {
    return true;
 }
 
-void CCIMaContainer::generateTradeSignal() {
+void CCIMaContainer::generateTradeSignal(MqlRates &mrate[]) {
+   
    //increase age
    signalAge++;
    
@@ -128,7 +130,7 @@ void CCIMaContainer::generateTradeSignal() {
    
    if(cciOversold && !cciGoingSouth) {
       cciBuySignal = true;
-      drawVerticalLine();
+      drawVerticalLine(mrate);
       signalAge = 0;
       cciOversold = false;
    }
@@ -162,7 +164,7 @@ void CCIMaContainer::generateTradeSignal() {
    
    if(cciOverbought && !cciGoingNorth ) {
       cciSellSignal = true;
-      drawVerticalLine();
+      drawVerticalLine(mrate);
       signalAge = 0;
       cciOverbought = false;
    }
@@ -172,19 +174,12 @@ void CCIMaContainer::generateTradeSignal() {
    }
 }
 
-void CCIMaContainer::drawVerticalLine() {
-   //if(TimeDay(dailyTime)==14 && ObjectFind(0,name)<0)
-   //     {
-   long _chart_id = ChartID();
-   
-   string name = "CCISig";
-         if(!ObjectCreate(_chart_id,name,OBJ_VLINE,0,TimeCurrent(),0))
-            Print("Fail to draw the line ERROR CODE : ",GetLastError());
-         ObjectSetInteger(_chart_id,name,OBJPROP_WIDTH,1);
-         ObjectSetInteger(_chart_id,name,OBJPROP_COLOR,clrGreen);
-         ObjectSetInteger(_chart_id,name,OBJPROP_BACK,true);
-    //    }
-    // }
+void CCIMaContainer::drawVerticalLine(MqlRates &mrate[]) {
+       
+       string name = "CCI_signal" + TimeToString (mrate[0].time, TIME_DATE|TIME_SECONDS);
+       
+       ObjectCreate(0,name,OBJ_VLINE,0,mrate[0].time,0); 
+       ObjectSetInteger(0,name,OBJPROP_COLOR,clrLightGreen);
 }
 
 //MA Vector shows if MA is going up (positive value) or down (negative)

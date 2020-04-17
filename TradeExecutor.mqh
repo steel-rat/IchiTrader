@@ -29,6 +29,8 @@ class TradeExecutor : public CObject
          StochasticContainer *stochasticContainer_H1;
          //--- Handle of the CCIMa.mq5 custom indicator
          CCIMaContainer *cciMaContainer_H4;
+         CCIMaContainer *cciMaContainer_H1;
+         
          IchimokuMarket ichimokuMarketH4;
          IchimokuMarket ichimokuMarketH1;
          bool ichimokuTradeSignalH4;
@@ -47,7 +49,7 @@ class TradeExecutor : public CObject
          TradeExecutor(string sym);
          ~TradeExecutor(void);
          void copyBuffers();
-         void checkTradeConditions();
+         void checkTradeConditions(MqlRates &mrate[]);
          bool positionOpenedCloseTradeSignal(ENUM_POSITION_TYPE positionType);
          bool noPositionTradeDecision(ENUM_POSITION_TYPE positionType);
          bool cciAllowBuyTrade(); 
@@ -69,7 +71,7 @@ TradeExecutor::TradeExecutor(string sym)
    stochasticContainer_H1 = new StochasticContainer(sym,PERIOD_H1,INDICATOR_DATA);
    //cci ma
    cciMaContainer_H4 = new CCIMaContainer(sym,PERIOD_H4,INDICATOR_DATA);  
-
+   cciMaContainer_H1 = new CCIMaContainer(sym,PERIOD_H1,INDICATOR_DATA);
 }
   
 TradeExecutor::~TradeExecutor(void)
@@ -124,7 +126,7 @@ void TradeExecutor::executeTrade() {
   tradeClosedOnCciDownSignal = false;
 }
   
-void TradeExecutor::checkTradeConditions() {
+void TradeExecutor::checkTradeConditions(MqlRates &mrate[]) {
     //check trade signal on ichimoku H4
     if(ichimokuContainer_H4.tenkanKijunBuyCondition() || ichimokuContainer_H4.tenkanKijunSellCondition()) {
       ichimokuTradeSignalH4 = true;
@@ -162,7 +164,7 @@ void TradeExecutor::checkTradeConditions() {
       ichimokuMarketH1 = ICHIMOKU_BEAR;
     }
     //if ichimokuTradeSignalH4 comes then we need to find optimal point of entry on H1
-    cciMaContainer_H4.generateTradeSignal();
+    cciMaContainer_H4.generateTradeSignal(mrate);
     
     cciBelowChannelUpH1 = cciMaContainer_H4.cciBelowChannelUp();
     cciGoBelowChannelUpH1 = cciMaContainer_H4.cciGoBelowChannelUp();
