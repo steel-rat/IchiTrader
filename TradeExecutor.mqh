@@ -7,6 +7,7 @@
 #include "StochasticContainer.mqh"
 #include "IchimokuContainer.mqh"
 #include "CCIMaContainer.mqh"
+#include "SignalContainer.mqh"
 
 #property copyright "SteelRat"
 #property link      "none"
@@ -31,6 +32,8 @@ class TradeExecutor : public CObject
          CCIMaContainer *cciMaContainer_H4;
          CCIMaContainer *cciMaContainer_H1;
          
+         SignalContainer *signalContainer;
+                  
          IchimokuMarket ichimokuMarketH4;
          IchimokuMarket ichimokuMarketH1;
          bool ichimokuTradeSignalH4;
@@ -51,7 +54,7 @@ class TradeExecutor : public CObject
          void copyBuffers();
          void checkTradeConditions(MqlRates &mrate[]);
          bool positionOpenedCloseTradeSignal(ENUM_POSITION_TYPE positionType);
-         bool noPositionTradeDecision(ENUM_POSITION_TYPE positionType);
+         bool noPositionTradeDecision(ENUM_POSITION_TYPE positionType, bool positionOpened);
          bool cciAllowBuyTrade(); 
          bool cciAllowSellTrade();   
                   
@@ -64,14 +67,18 @@ TradeExecutor::TradeExecutor(string sym)
 {
    maxCciSignalAge = 7;
 
-   ichimokuContainer_H4 = new IchimokuContainer(sym,PERIOD_H4,INDICATOR_DATA);
-   ichimokuContainer_H1 = new IchimokuContainer(sym,PERIOD_H1,INDICATOR_DATA);
+   signalContainer = new SignalContainer();
 
-   stochasticContainer_H4 = new StochasticContainer(sym,PERIOD_H4,INDICATOR_DATA);
-   stochasticContainer_H1 = new StochasticContainer(sym,PERIOD_H1,INDICATOR_DATA);
+   ichimokuContainer_H4 = new IchimokuContainer(sym,PERIOD_H4,INDICATOR_DATA, signalContainer);
+   ichimokuContainer_H1 = new IchimokuContainer(sym,PERIOD_H1,INDICATOR_DATA, signalContainer);
+
+   stochasticContainer_H4 = new StochasticContainer(sym,PERIOD_H4,INDICATOR_DATA, signalContainer);
+   stochasticContainer_H1 = new StochasticContainer(sym,PERIOD_H1,INDICATOR_DATA, signalContainer);
    //cci ma
-   cciMaContainer_H4 = new CCIMaContainer(sym,PERIOD_H4,INDICATOR_DATA);  
-   cciMaContainer_H1 = new CCIMaContainer(sym,PERIOD_H1,INDICATOR_DATA);
+   cciMaContainer_H4 = new CCIMaContainer(sym,PERIOD_H4,INDICATOR_DATA, signalContainer);  
+   cciMaContainer_H1 = new CCIMaContainer(sym,PERIOD_H1,INDICATOR_DATA, signalContainer);
+   
+   
 }
   
 TradeExecutor::~TradeExecutor(void)
@@ -87,6 +94,7 @@ void TradeExecutor::copyBuffers() {
    stochasticContainer_H1.copyBuffers();
 
    cciMaContainer_H4.copyBuffers();
+   cciMaContainer_H1.copyBuffers();
 }
 
 bool TradeExecutor::positionOpenedCloseTradeSignal(ENUM_POSITION_TYPE positionType) {
@@ -98,17 +106,23 @@ bool TradeExecutor::positionOpenedCloseTradeSignal(ENUM_POSITION_TYPE positionTy
       //   tradeClosedOnCciDownSignal = true;
       //   return true;
       //}
-      if(cciMaContainer_H4.cciGoBelowMa()) {
-         tradeClosedOnCciDownSignal = true;
+      if(signalContainer.closeBuySignal()) {
          return true;
       }
+      //if(cciMaContainer_H4.cciGoBelowMa()) {
+      //   tradeClosedOnCciDownSignal = true;
+      //   return true;
+      //}
       
    } else {
       //if(stochasticContainer_H4.stochasticBuySignal()) {
       //   return true;
       //}
-      if(cciMaContainer_H4.cciGoAboveMa()) {
+      //if(cciMaContainer_H4.cciGoAboveMa()) {
          //tradeClosedOnCciDownSignal = true;
+      //   return true;
+      //}
+      if(signalContainer.closeSellSignal()) {
          return true;
       }
       
@@ -165,18 +179,30 @@ void TradeExecutor::checkTradeConditions(MqlRates &mrate[]) {
     }
     //if ichimokuTradeSignalH4 comes then we need to find optimal point of entry on H1
     cciMaContainer_H4.generateTradeSignal(mrate);
+    cciMaContainer_H1.generateTradeSignal(mrate);
+    
+    ichimokuContainer_H4.generateTradeSignal(mrate);
+    ichimokuContainer_H1.generateTradeSignal(mrate);
+    
+    stochasticContainer_H4.generateTradeSignal(mrate);
     
     cciBelowChannelUpH1 = cciMaContainer_H4.cciBelowChannelUp();
     cciGoBelowChannelUpH1 = cciMaContainer_H4.cciGoBelowChannelUp();
     cciGoAboveChannelDownH1 = cciMaContainer_H4.cciGoAboveChannelDown();
     cciAboveMaH1 = cciMaContainer_H4.cciAboveMa();
 }
-
-bool TradeExecutor::noPositionTradeDecision(ENUM_POSITION_TYPE positionType) {
+/// method returns true if trade should be performed (depending of position type)
+bool TradeExecutor::noPositionTradeDecision(ENUM_POSITION_TYPE positionType, bool positionOpened) {
    //if(ichimokuTradeWaitingForExecution) {
+      if(positionOpened) {
+         return false;
+      }
+      
       if(positionType == POSITION_TYPE_BUY) {
          //if(ichimokuMarketH4 == ICHIMOKU_BULL && cciAllowBuyTrade()) {
-         if(cciAllowBuyTrade()) {
+         //if(cciAllowBuyTrade()) {
+          
+         if(signalContainer.returnBuySignal()) {
          
             tradeSendToExecution=true;
             cciMaContainer_H4.cciBuySignal = false; //how to retry trade on stoploss?
@@ -187,7 +213,8 @@ bool TradeExecutor::noPositionTradeDecision(ENUM_POSITION_TYPE positionType) {
    
       if(positionType == POSITION_TYPE_SELL) {
          //if(ichimokuMarketH4 == ICHIMOKU_BEAR && cciAllowSellTrade()) {
-         if(cciAllowSellTrade()) {
+         //if(cciAllowSellTrade()) {
+         if(signalContainer.returnSellSignal()) {
          
             tradeSendToExecution=true;
             cciMaContainer_H4.cciSellSignal = false;

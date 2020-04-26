@@ -3,6 +3,9 @@
 //|                                                         SteelRat |
 //|                                                             none |
 //+------------------------------------------------------------------+
+
+#include "SignalContainer.mqh"
+
 #property copyright "SteelRat"
 #property link      "none"
 #property version   "1.00"
@@ -14,10 +17,13 @@ private:
             
             int stochHandle;
             
+            SignalContainer *signalContainer;
+            SignalType signalType;
+            ENUM_TIMEFRAMES period;             
             
 
 public:
-                     StochasticContainer(string commodity, ENUM_TIMEFRAMES per,ENUM_INDEXBUFFER_TYPE data);
+                     StochasticContainer(string commodity, ENUM_TIMEFRAMES per,ENUM_INDEXBUFFER_TYPE data, SignalContainer *signalContainer);
                     ~StochasticContainer();
                     bool copyBuffers();
                     bool stochasticBuySignal(void);
@@ -26,6 +32,8 @@ public:
                     bool mainAboveSignal();
                     bool mainBelowSignal();
                     
+                    void generateTradeSignal(MqlRates &mrate[]);
+                    
                     
                     bool mainLineAbove80Hit;
                      bool mainLineBelow20Hit;
@@ -33,8 +41,16 @@ public:
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-StochasticContainer::StochasticContainer(string commodity, ENUM_TIMEFRAMES per,ENUM_INDEXBUFFER_TYPE data) : mainLineAbove80Hit(false),mainLineBelow20Hit(false)
+StochasticContainer::StochasticContainer(string commodity, ENUM_TIMEFRAMES per,ENUM_INDEXBUFFER_TYPE data, SignalContainer *signalContainer) : mainLineAbove80Hit(false),mainLineBelow20Hit(false)
   {
+      this.signalContainer = signalContainer;
+      this.period = per;
+      if(period == PERIOD_H4) {
+         signalType = STOCH4;
+      } else {
+         signalType = STOCH1;
+      }
+      
       SetIndexBuffer(0,Stoch_Main_Buffer,INDICATOR_DATA);
       SetIndexBuffer(1,Stoch_Sig_Buffer,INDICATOR_DATA);
       
@@ -88,4 +104,12 @@ bool StochasticContainer::mainAboveSignal(){
 
 bool StochasticContainer::mainBelowSignal(){
    return Stoch_Main_Buffer[1] < Stoch_Sig_Buffer[1];
+}
+//generate trade signal
+void StochasticContainer::generateTradeSignal(MqlRates &mrate[]) {
+   if(stochasticBuySignal()) {
+      signalContainer.registerBuySignal(signalType);
+   } else if(stochasticSellSignal()) {
+      signalContainer.registerSellSignal(signalType);
+   }
 }

@@ -3,11 +3,15 @@
 //|                                                         SteelRat |
 //|                                                             none |
 //+------------------------------------------------------------------+
+#include <Object.mqh>
+#include "SignalContainer.mqh"
+
 #property copyright "SteelRat"
 #property link      "none"
 
+
 enum CCIState {
-   OVERSOLD, OVERBOUGHT
+   OVERSOLD, OVERBOUGHT, TOTAL_OVERSOLD, TOTAL_OVERBOUGHT
 };
 
 class CCIMaContainer : public CObject
@@ -29,11 +33,17 @@ private:
             double cciMin;
             double cciMax;
             
-                       
+            SignalContainer *signalContainer;
+            SignalType signalType;
+            ENUM_TIMEFRAMES period; 
+            int buyColor2;
+            int buyColor3;
+            int sellColor2;
+            int sellColor3;                      
                                   
 
 public:
-            CCIMaContainer(string commodity, ENUM_TIMEFRAMES per,ENUM_INDEXBUFFER_TYPE data);
+            CCIMaContainer(string commodity, ENUM_TIMEFRAMES per,ENUM_INDEXBUFFER_TYPE data, SignalContainer *signalContainer);
            ~CCIMaContainer();
            bool copyBuffers();
            void generateTradeSignal(MqlRates &mrate[]);
@@ -48,7 +58,7 @@ public:
            bool cciAboveChannelUp();
            bool cciBelowChannelDown();
            double calculateMaVector();
-           void drawVerticalLine(MqlRates &mrate[]);
+           void drawVerticalLine(MqlRates &mrate[], int colour);
            
            bool cciSellSignal;
            bool cciBuySignal;
@@ -58,8 +68,24 @@ public:
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-CCIMaContainer::CCIMaContainer(string commodity, ENUM_TIMEFRAMES per,ENUM_INDEXBUFFER_TYPE data)
+CCIMaContainer::CCIMaContainer(string commodity, ENUM_TIMEFRAMES per,ENUM_INDEXBUFFER_TYPE data, SignalContainer *signalContainer)
   {
+      this.signalContainer = signalContainer;
+      this.period = per;
+      if(period == PERIOD_H4) {
+         signalType = CCIH4;
+         buyColor2 = clrSpringGreen;
+         buyColor3 = clrLime;
+         sellColor2 = clrMagenta;
+         sellColor3 = clrRed;
+      } else {
+         signalType = CCIH1;
+         buyColor2 = clrLimeGreen;
+         buyColor3 = clrGreen;
+         sellColor2 = clrHotPink;
+         sellColor3 = clrSalmon;
+      }
+      
       SetIndexBuffer(0,CCI_Buffer,INDICATOR_DATA);
       SetIndexBuffer(1,MA_Buffer,INDICATOR_DATA);
       SetIndexBuffer(3,ChannelUp_Buffer,INDICATOR_DATA);
@@ -112,6 +138,7 @@ void CCIMaContainer::generateTradeSignal(MqlRates &mrate[]) {
    if(cciGoingSouth && (cciBuySignal || cciSellSignal)) {
       cciBuySignal = false;
       cciSellSignal = false;
+      signalContainer.setCciSignalStrenght(period,0);
    }
    
    if(cciGoingSouth) { 
@@ -119,7 +146,11 @@ void CCIMaContainer::generateTradeSignal(MqlRates &mrate[]) {
          cciMin = CCI_Buffer[1];
       } else {
          cciOversold = true;
-         lastState = OVERSOLD;
+         if(cciMin < 100) {
+            lastState = TOTAL_OVERSOLD;
+         } else {
+            lastState = OVERSOLD;
+         }
       }
    }
    
@@ -130,7 +161,7 @@ void CCIMaContainer::generateTradeSignal(MqlRates &mrate[]) {
    
    if(cciOversold && !cciGoingSouth) {
       cciBuySignal = true;
-      drawVerticalLine(mrate);
+      signalContainer.registerBuySignal(signalType);
       signalAge = 0;
       cciOversold = false;
    }
@@ -146,6 +177,7 @@ void CCIMaContainer::generateTradeSignal(MqlRates &mrate[]) {
    if(cciGoingNorth && (cciBuySignal || cciSellSignal)) {
       cciBuySignal = false;
       cciSellSignal = false;
+      signalContainer.setCciSignalStrenght(period,0);
    }
    
    if(cciGoingNorth) { 
@@ -153,7 +185,11 @@ void CCIMaContainer::generateTradeSignal(MqlRates &mrate[]) {
          cciMax = CCI_Buffer[1];
       } else {
          cciOverbought = true;
-         lastState = OVERBOUGHT;
+         if(cciMax > 100) {
+            lastState = TOTAL_OVERBOUGHT;
+         } else {
+            lastState = OVERBOUGHT;
+         }
       }
    }
    
@@ -164,7 +200,7 @@ void CCIMaContainer::generateTradeSignal(MqlRates &mrate[]) {
    
    if(cciOverbought && !cciGoingNorth ) {
       cciSellSignal = true;
-      drawVerticalLine(mrate);
+      signalContainer.registerSellSignal(signalType);
       signalAge = 0;
       cciOverbought = false;
    }
@@ -172,14 +208,38 @@ void CCIMaContainer::generateTradeSignal(MqlRates &mrate[]) {
    if(cciSellSignal && cciGoAboveMa()) {
       cciSellSignal = false;
    }
+   
+   if(cciBuySignal || cciSellSignal) {
+      if(lastState == TOTAL_OVERBOUGHT || lastState == TOTAL_OVERSOLD) {
+         signalContainer.setCciSignalStrenght(period,4);
+         if(cciBuySignal) {
+            drawVerticalLine(mrate, buyColor3);
+         } else {
+            drawVerticalLine(mrate, sellColor3);
+         }
+      } else if(lastState == OVERBOUGHT || lastState == OVERSOLD) {
+         signalContainer.setCciSignalStrenght(period,2);
+         if(cciBuySignal) {
+            drawVerticalLine(mrate, buyColor2);
+         } else {
+            drawVerticalLine(mrate, sellColor2);
+         }
+      } else {
+         signalContainer.setCciSignalStrenght(period,1);
+         //drawVerticalLine(mrate, clrLightPink);
+      }
+   }
+   
+   
+   signalContainer.setCciMaVector(period,calculateMaVector());
 }
 
-void CCIMaContainer::drawVerticalLine(MqlRates &mrate[]) {
+void CCIMaContainer::drawVerticalLine(MqlRates &mrate[], int colour) {
        
        string name = "CCI_signal" + TimeToString (mrate[0].time, TIME_DATE|TIME_SECONDS);
        
        ObjectCreate(0,name,OBJ_VLINE,0,mrate[0].time,0); 
-       ObjectSetInteger(0,name,OBJPROP_COLOR,clrLightGreen);
+       ObjectSetInteger(0,name,OBJPROP_COLOR,colour);
 }
 
 //MA Vector shows if MA is going up (positive value) or down (negative)

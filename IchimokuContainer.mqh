@@ -7,6 +7,8 @@
 #property link      "none"
 #property version   "1.00"
 
+#include "SignalContainer.mqh"
+
 //int InpTenkan=9;     // Tenkan-sen
 //         int InpKijun=26;     // Kijun-sen
 //         int InpSenkou=52;    // Senkou Span B
@@ -22,17 +24,21 @@ private:
          double         Chinkou_Span_Buffer[];
          //-timeframe
          ENUM_TIMEFRAMES period;
+         SignalType signalType;
          
          MqlRates mrate[];          // To be used to store the prices, volumes and spread of each bar
          double p_close; // Variable to store the close value of a bar
          
          //handle to signal
          int hIchimoku;
+         
+         SignalContainer *signalContainer;
 
               
 public:
-         IchimokuContainer(string commodity, ENUM_TIMEFRAMES period,ENUM_INDEXBUFFER_TYPE data);
+         IchimokuContainer(string commodity, ENUM_TIMEFRAMES period,ENUM_INDEXBUFFER_TYPE data, SignalContainer *signalContainer);
          ~IchimokuContainer();
+         void generateTradeSignal(MqlRates &mrate[]);
          bool copyBuffers();
          bool tenkanKijunBuyCondition();
          bool tenkanKijunSellCondition();
@@ -43,13 +49,22 @@ public:
          bool tenkanKijunBear();
          bool priceBelowKijun();
          bool priceAboveKijun();  //Kijun == slower
+         bool priceGoAboveTenkan();
+         bool priceGoBelowTenkan();
   };
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-IchimokuContainer::IchimokuContainer(string commodity, ENUM_TIMEFRAMES per,ENUM_INDEXBUFFER_TYPE data)
+IchimokuContainer::IchimokuContainer(string commodity, ENUM_TIMEFRAMES per,ENUM_INDEXBUFFER_TYPE data, SignalContainer *signalContainer)
   {
+         this.signalContainer = signalContainer;
          this.period = per;
+         
+         if(period == PERIOD_H4) {
+            signalType = ICHIH4;
+         } else {
+            signalType = ICHIH1;
+         }
          
          //--- assignment of arrays to indicator buffers
          SetIndexBuffer(0,Tenkan_sen_Buffer,INDICATOR_DATA);
@@ -159,4 +174,22 @@ bool IchimokuContainer::priceBelowKijun(void) {
 
 bool IchimokuContainer::priceAboveKijun(void) {
    return p_close > Kijun_sen_Buffer[1];
+}
+
+bool IchimokuContainer::priceGoAboveTenkan() {
+   return mrate[1].close > Tenkan_sen_Buffer[1] && mrate[2].close < Tenkan_sen_Buffer[2];
+}
+
+bool IchimokuContainer::priceGoBelowTenkan() {
+   return mrate[1].close < Tenkan_sen_Buffer[1] && mrate[2].close > Tenkan_sen_Buffer[2];
+}
+
+//generate trade signal
+void IchimokuContainer::generateTradeSignal(MqlRates &mrate[]) {
+   if(priceGoAboveTenkan()) {
+      signalContainer.registerBuySignal(signalType);
+   }
+   if(priceGoBelowTenkan()) {
+      signalContainer.registerSellSignal(signalType);
+   }
 }
